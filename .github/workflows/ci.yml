@@ -21,9 +21,9 @@ jobs:
           - 5432:5432
         options: >-
           --health-cmd="pg_isready -U runner"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=10
 
     steps:
       - name: Checkout Code
@@ -40,12 +40,29 @@ jobs:
       - name: Install Dependencies
         run: go mod tidy
 
-      - name: Wait for PostgreSQL
-        run: sleep 10  # Wait for PostgreSQL to start
+      - name: Wait for PostgreSQL to be Ready
+        run: |
+          for i in {1..30}; do
+            if pg_isready -h localhost -p 5432 -U runner; then
+              echo "PostgreSQL is ready!"
+              exit 0
+            fi
+            echo "Waiting for PostgreSQL..."
+            sleep 2
+          done
+          echo "PostgreSQL failed to start."
+          exit 1
+
+      - name: Debug PostgreSQL Logs (If Needed)
+        run: docker logs $(docker ps -q --filter ancestor=postgres:15)
 
       - name: Run Unit Tests
         env:
           DATABASE_URL: postgres://runner:password@localhost:5432/testdb?sslmode=disable
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: runner
+          PGPASSWORD: password
         run: go test ./...
 
   docker:
