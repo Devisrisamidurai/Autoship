@@ -10,6 +10,21 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:15  # Use a stable PostgreSQL version
+        env:
+          POSTGRES_USER: runner
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U runner"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -17,15 +32,20 @@ jobs:
       - name: Set Up Go
         uses: actions/setup-go@v4
         with:
-          go-version: 1.21
-          
+          go-version: '1.21'
+
       - name: Verify Go Installation
         run: go version
 
       - name: Install Dependencies
         run: go mod tidy
 
+      - name: Wait for PostgreSQL
+        run: sleep 10  # Wait for PostgreSQL to start
+
       - name: Run Unit Tests
+        env:
+          DATABASE_URL: postgres://runner:password@localhost:5432/testdb?sslmode=disable
         run: go test ./...
 
   docker:
@@ -44,3 +64,4 @@ jobs:
 
       - name: Push Docker Image
         run: docker push devisri2104/task-manager
+
